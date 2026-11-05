@@ -1,11 +1,14 @@
+#include <algorithm>
 #include <csignal>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <string>
 
 #include "comm/can_socket.hpp"
 #include "diag/dtc_manager.hpp"
+#include "diag/uds_server.hpp"
 #include "state/vehicle_state.hpp"
 
 namespace {
@@ -13,6 +16,9 @@ namespace {
 constexpr canid_t kIdVcuStatus = 0x100;
 constexpr canid_t kIdBmsStatus = 0x200;
 constexpr canid_t kIdHmiCommand = 0x210;
+constexpr canid_t kIdUdsRequest = 0x7E0;
+constexpr canid_t kIdUdsResponse = 0x7E8;
+constexpr std::size_t kMaxSingleFrame = 7;
 constexpr std::chrono::milliseconds kTxPeriod{100};
 
 volatile std::sig_atomic_t g_running = 1;
@@ -49,6 +55,29 @@ can_frame encode_vcu_status(const VehicleStateMachine& sm, std::uint8_t counter)
     return f;
 }
 
+// ISO-TP : Single Frame uniquement (PCI 0x0N, N = longueur de 1 à 7).
+bool decode_isotp_sf(const can_frame& f, Bytes& out) {
+    if (f.can_dlc < 2 || (f.data[0] & 0xF0) != 0x00) {
+        return false;
+    }
+    const std::size_t len = f.data[0] & 0x0F;
+    if (len == 0 || len > kMaxSingleFrame || len > static_cast<std::size_t>(f.can_dlc) - 1) {
+        return false;
+    }
+    out.assign(f.data + 1, f.data + 1 + len);
+    return true;
+}
+
+can_frame encode_isotp_sf(const Bytes& payload) {
+    can_frame f{};
+    f.can_id = kIdUdsResponse;
+    f.can_dlc = 8;
+    std::memset(f.data, 0xAA, sizeof(f.data));  // remplissage
+    f.data[0] = static_cast<std::uint8_t>(payload.size());
+    std::copy(payload.begin(), payload.end(), f.data + 1);
+    return f;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -60,10 +89,12 @@ int main(int argc, char** argv) {
         CanSocket can(ifname);
         VehicleStateMachine sm;
         DtcManager dtcs;
+        UdsServer uds(dtcs, sm);
         std::uint8_t counter = 0;
         VehicleState last_state = sm.state();
         bool last_fault = false;
         std::uint8_t last_dtc_status = 0;
+        std::uint8_t last_session = uds.session();
         TimePoint next_tx = Clock::now();
 
         std::cout << "VCU démarré sur " << ifname << " (état " << to_string(last_state) << ")\n";
@@ -76,11 +107,20 @@ int main(int argc, char** argv) {
                     sm.on_bms(decode_bms(*f), rx);
                 } else if (id == kIdHmiCommand && f->can_dlc >= 3) {
                     sm.on_hmi(decode_hmi(*f), rx);
+                } else if (id == kIdUdsRequest) {
+                    Bytes request;
+                    if (decode_isotp_sf(*f, request)) {
+                        const auto response = uds.handle(request, rx);
+                        if (response && response->size() <= kMaxSingleFrame) {
+                            can.send(encode_isotp_sf(*response));
+                        }
+                    }
                 }
             }
 
             const TimePoint now = Clock::now();
             sm.tick(now);
+            uds.tick(now);
             dtcs.report(dtc::kBmsTimeout, sm.fault_active(), now);
 
             if (sm.state() != last_state) {
@@ -99,6 +139,10 @@ int main(int argc, char** argv) {
             if (dtc_status != last_dtc_status) {
                 last_dtc_status = dtc_status;
                 std::printf("DTC %06X : statut 0x%02X\n", dtc::kBmsTimeout, dtc_status);
+            }
+            if (uds.session() != last_session) {
+                last_session = uds.session();
+                std::printf("Session UDS : 0x%02X\n", last_session);
             }
 
             if (now >= next_tx) {

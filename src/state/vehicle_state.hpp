@@ -36,6 +36,7 @@ public:
 
     VehicleState state() const { return state_; }
     bool fault_active() const { return bms_timeout_; }
+    const BmsStatus& bms() const { return bms_; }
     std::uint8_t torque_limit_pct() const;
 
 private:

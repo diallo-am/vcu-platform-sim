@@ -8,7 +8,8 @@ add_compile_options(-Wall -Wextra -Wpedantic)
 add_library(vcu_core
     src/state/vehicle_state.cpp
     src/comm/can_socket.cpp
-    src/diag/dtc_manager.cpp)
+    src/diag/dtc_manager.cpp
+    src/diag/uds_server.cpp)
 target_include_directories(vcu_core PUBLIC src)
 
 add_executable(vcu src/main.cpp)
