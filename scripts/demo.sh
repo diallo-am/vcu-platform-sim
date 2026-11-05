@@ -29,3 +29,6 @@ python tools/uds_tester.py 19 02 FF
 python tools/uds_tester.py 10 03
 python tools/uds_tester.py 14 FF FF FF
 python tools/uds_tester.py 19 01 FF
+
+echo
+read -r -p "Fin " _
