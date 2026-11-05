@@ -4,10 +4,14 @@ set -u
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
 
+BMS=""
+HMI=""
+cleanup() { kill $BMS $HMI 2>/dev/null; }
+trap cleanup EXIT
+
 python tools/bms_node.py & BMS=$!
-trap 'kill $BMS $HMI 2>/dev/null' EXIT
 sleep 0.5
-python tools/hmi_node.py --run-seconds 25 & HMI=$!
+python tools/hmi_node.py --run-seconds 60 & HMI=$!
 
 echo "== Attente de l'état RUN"
 sleep 3
