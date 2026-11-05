@@ -4,7 +4,14 @@ A simulated **vehicle control unit (VCU) software platform** running on Linux ov
 
 This is a learning and prototyping project built around micromobility-style signals (battery, driver interface). It is a **simulation**: no real ECU hardware is involved yet (see [Limitations](#limitations)).
 
-## Architecture
+## Demo
+
+![VCU simulation: state transitions, decoded CAN frames and UDS queries](docs/demo.png)
+
+*Left: VCU state transitions. Top right: `VCU_Status` decoded with the DBC. Bottom right: UDS requests.*
+
+
+### Architecture
 
 ```mermaid
 flowchart TB
@@ -33,7 +40,7 @@ flowchart TB
 - `VehicleStateMachine` and `DtcManager` perform no I/O and take the current time as a parameter, so the logic is testable without a bus.
 - Signal layout is defined once in `dbc/vehicle.dbc`. The C++ decoding follows that file; the Python tools and tests use it through `cantools`.
 
-### Vehicle state machine
+#### Vehicle state machine
 
 ```mermaid
 stateDiagram-v2
@@ -126,6 +133,9 @@ The suite starts a fresh `vcu` process for each test, simulates the BMS and HMI,
 | REQ-005 UDS transport, error codes | `test_req005_uds_transport_and_error_codes` |
 | REQ-006 clear DTC needs extended session | `test_req006_clear_dtc_requires_extended_session` |
 | REQ-007 S3 timeout | `test_req007_s3_timeout_returns_to_default_session` |
+
+<img width="952" height="580" alt="image" src="https://github.com/user-attachments/assets/885f5640-4412-4c40-bee0-b3a0f295b9be" />
+
 
 ## Limitations
 
