@@ -1,0 +1,27 @@
+VERSION "0.1"
+
+NS_ :
+
+BS_:
+
+BU_: VCU BMS HMI
+
+BO_ 256 VCU_Status: 8 VCU
+ SG_ VehicleState : 0|4@1+ (1,0) [0|3] "" HMI,BMS
+ SG_ FaultActive : 4|1@1+ (1,0) [0|1] "" HMI
+ SG_ AliveCounter : 8|4@1+ (1,0) [0|15] "" HMI,BMS
+ SG_ TorqueLimit : 16|8@1+ (1,0) [0|100] "%" HMI
+
+BO_ 512 BMS_Status: 8 BMS
+ SG_ PackVoltage : 0|16@1+ (0.01,0) [0|100] "V" VCU
+ SG_ PackCurrent : 16|16@1- (0.1,0) [-300|300] "A" VCU
+ SG_ SOC : 32|8@1+ (1,0) [0|100] "%" VCU,HMI
+ SG_ AliveCounter : 40|4@1+ (1,0) [0|15] "" VCU
+
+BO_ 528 HMI_Command: 8 HMI
+ SG_ WakeRequest : 0|1@1+ (1,0) [0|1] "" VCU
+ SG_ SleepRequest : 1|1@1+ (1,0) [0|1] "" VCU
+ SG_ ThrottlePct : 8|8@1+ (0.5,0) [0|100] "%" VCU
+ SG_ AliveCounter : 16|4@1+ (1,0) [0|15] "" VCU
+
+VAL_ 256 VehicleState 0 "OFF" 1 "WAKEUP" 2 "RUN" 3 "SLEEP" ;
