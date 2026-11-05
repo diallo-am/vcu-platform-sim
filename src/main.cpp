@@ -1,9 +1,11 @@
 #include <csignal>
 #include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include <string>
 
 #include "comm/can_socket.hpp"
+#include "diag/dtc_manager.hpp"
 #include "state/vehicle_state.hpp"
 
 namespace {
@@ -57,34 +59,46 @@ int main(int argc, char** argv) {
     try {
         CanSocket can(ifname);
         VehicleStateMachine sm;
+        DtcManager dtcs;
         std::uint8_t counter = 0;
         VehicleState last_state = sm.state();
         bool last_fault = false;
+        std::uint8_t last_dtc_status = 0;
         TimePoint next_tx = Clock::now();
 
         std::cout << "VCU démarré sur " << ifname << " (état " << to_string(last_state) << ")\n";
 
         while (g_running) {
             if (auto f = can.receive(10)) {
-                const TimePoint now = Clock::now();
+                const TimePoint rx = Clock::now();
                 const canid_t id = f->can_id & CAN_SFF_MASK;
                 if (id == kIdBmsStatus && f->can_dlc >= 6) {
-                    sm.on_bms(decode_bms(*f), now);
+                    sm.on_bms(decode_bms(*f), rx);
                 } else if (id == kIdHmiCommand && f->can_dlc >= 3) {
-                    sm.on_hmi(decode_hmi(*f), now);
+                    sm.on_hmi(decode_hmi(*f), rx);
                 }
             }
 
             const TimePoint now = Clock::now();
             sm.tick(now);
+            dtcs.report(dtc::kBmsTimeout, sm.fault_active(), now);
 
             if (sm.state() != last_state) {
                 std::cout << to_string(last_state) << " -> " << to_string(sm.state()) << "\n";
+                if (sm.state() == VehicleState::Off) {
+                    dtcs.end_operation_cycle();  // fin du cycle d'opération
+                }
                 last_state = sm.state();
             }
             if (sm.fault_active() != last_fault) {
                 last_fault = sm.fault_active();
                 std::cout << (last_fault ? "DEFAUT : BMS_Status absent\n" : "Défaut BMS disparu\n");
+            }
+
+            const std::uint8_t dtc_status = dtcs.status(dtc::kBmsTimeout);
+            if (dtc_status != last_dtc_status) {
+                last_dtc_status = dtc_status;
+                std::printf("DTC %06X : statut 0x%02X\n", dtc::kBmsTimeout, dtc_status);
             }
 
             if (now >= next_tx) {
